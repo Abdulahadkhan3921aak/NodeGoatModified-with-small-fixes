@@ -82,7 +82,7 @@ logger.info('Application started with enhanced security features');
  */
 const ipBlockMiddleware = (req, res, next) => {
     const clientIP = req.ip || req.connection.remoteAddress;
-    
+
     // Check if the IP is in the blocklist
     if (ipBlocklist.has(clientIP)) {
         const blockData = ipBlocklist.get(clientIP);
@@ -104,7 +104,7 @@ const ipBlockMiddleware = (req, res, next) => {
 const apiKeyAuth = (req, res, next) => {
     const apiKey = req.header('X-API-KEY');
     const validApiKey = process.env.API_KEY || 'default-dev-api-key';
-    
+
     if (!apiKey || apiKey !== validApiKey) {
         logger.warn(`Unauthorized API access attempt`, { meta: { req } });
         return res.status(401).json({ error: 'Invalid API key' });
@@ -119,7 +119,7 @@ const apiKeyAuth = (req, res, next) => {
 const jwtAuth = (req, res, next) => {
     const authHeader = req.header('Authorization');
     const token = authHeader ? authHeader.split(' ')[1] : null; // Extract token from Bearer header
-    
+
     if (!token) {
         return res.status(401).json({ error: 'Access denied. No token provided.' });
     }
@@ -150,10 +150,10 @@ MongoClient.connect(db, (err, db) => {
             write: (message) => logger.info(message.trim())
         }
     }));
-    
+
     // Apply IP blocking middleware to all requests
     app.use(ipBlockMiddleware);
-    
+
     // Apply rate limiting to all requests
     const limiter = rateLimit({
         windowMs: 15 * 60 * 1000, // 15 minutes
@@ -167,14 +167,13 @@ MongoClient.connect(db, (err, db) => {
         }
     });
     app.use(limiter);
-    
     // Configure CORS to allow only specific origins
     const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:4000').split(',');
     app.use(cors({
-        origin: function(origin, callback) {
+        origin: function (origin, callback) {
             // Allow requests with no origin (like mobile apps or curl requests)
             if (!origin) return callback(null, true);
-            
+
             if (allowedOrigins.indexOf(origin) === -1) {
                 logger.warn(`CORS blocked request from origin: ${origin}`);
                 return callback(new Error('CORS policy: Not allowed by CORS'), false);
@@ -208,8 +207,8 @@ MongoClient.connect(db, (err, db) => {
             includeSubDomains: true,
             preload: true
         },
-        frameguard: { 
-            action: 'deny' 
+        frameguard: {
+            action: 'deny'
         },
         xssFilter: true,
         noSniff: true,
@@ -218,10 +217,10 @@ MongoClient.connect(db, (err, db) => {
 
     // Remove default x-powered-by response header
     app.disable("x-powered-by");
-    
+
     // Forces browser to only use the Content-Type set in the response header instead of sniffing
     app.use(nosniff());
-    
+
     // Adding/remove HTTP Headers for security
     app.use(favicon(__dirname + "/app/assets/favicon.ico"));
 
@@ -232,42 +231,60 @@ MongoClient.connect(db, (err, db) => {
         extended: false
     }));
 
-    // Enable session management using express middleware
+    // // Enable session management using express middleware
+    // app.use(session({
+    //     // genid: (req) => {
+    //     //    return genuuid() // use UUIDs for session IDs
+    //     //},
+    //     secret: cookieSecret,
+    //     // Both mandatory in Express v4
+    //     saveUninitialized: true,
+    //     resave: true
+    //     /*
+    //     // Fix for A5 - Security MisConfig
+    //     // Use generic cookie name
+    //     key: "sessionId",
+    //     */
+
+    //     /*
+    //     // Fix for A3 - XSS
+    //     // TODO: Add "maxAge"
+    //     cookie: {
+    //         httpOnly: true
+    //         // Remember to start an HTTPS server to get this working
+    //         // secure: true
+    //     }
+    //     */
+
+    // }));
+
     app.use(session({
-        // genid: (req) => {
-        //    return genuuid() // use UUIDs for session IDs
-        //},
-        secret: cookieSecret,
-        // Both mandatory in Express v4
-        saveUninitialized: true,
-        resave: true
-        /*
-        // Fix for A5 - Security MisConfig
-        // Use generic cookie name
-        key: "sessionId",
-        */
-
-        /*
-        // Fix for A3 - XSS
-        // TODO: Add "maxAge"
+        secret: process.env.SESSION_SECRET || 'your-secret-key-change-this',
+        resave: false,
+        saveUninitialized: false,
         cookie: {
-            httpOnly: true
-            // Remember to start an HTTPS server to get this working
-            // secure: true
-        }
-        */
-
+            secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+            httpOnly: true,  // Prevent XSS access to cookies
+            maxAge: 30 * 60 * 1000, // 30 minutes
+            sameSite: 'strict' // CSRF protection
+        },
+        name: 'nodegoat.sid' // Don't use default session name
     }));
+
 
     // Enable Express csrf protection using our enhanced middleware
     const csrfMiddleware = require('./middleware/csurf-init');
     app.use(csrfMiddleware);
+    const securityHeaders = require('./app/middleware/security-headers');
+    app.use(securityHeaders);
+
+
 
     // Register templating engine
     app.engine(".html", consolidate.swig);
     app.set("view engine", "html");
     app.set("views", `${__dirname}/app/views`);
-    
+
     // Fix for A5 - Security MisConfig
     // TODO: make sure assets are declared before app.use(session())
     app.use(express.static(`${__dirname}/app/assets`));
@@ -278,12 +295,12 @@ MongoClient.connect(db, (err, db) => {
         sanitize: true
     });
     app.locals.marked = marked;
-    
+
     // Track failed login attempts and implement IP blocking
     app.post('/login', async (req, res, next) => {
         const clientIP = req.ip || req.connection.remoteAddress;
         const username = req.body.username;
-        
+
         // Initialize tracking for this IP if it doesn't exist
         if (!loginAttempts[clientIP]) {
             loginAttempts[clientIP] = {
@@ -292,12 +309,12 @@ MongoClient.connect(db, (err, db) => {
                 username: username
             };
         }
-        
+
         // Track this attempt
         loginAttempts[clientIP].count++;
         loginAttempts[clientIP].lastAttempt = Date.now();
         loginAttempts[clientIP].username = username;
-        
+
         // Check if this IP should be blocked
         if (loginAttempts[clientIP].count >= MAX_LOGIN_ATTEMPTS) {
             // Add to blocklist
@@ -305,28 +322,28 @@ MongoClient.connect(db, (err, db) => {
                 expiry: Date.now() + BLOCK_TIME_MS,
                 reason: 'Too many failed login attempts'
             });
-            
+
             // Log the blocking event
-            logger.warn(`IP ${clientIP} blocked due to excessive login failures for user: ${username}`, { 
+            logger.warn(`IP ${clientIP} blocked due to excessive login failures for user: ${username}`, {
                 meta: { req, attempts: loginAttempts[clientIP].count }
             });
-            
+
             // Reset the counter
             delete loginAttempts[clientIP];
-            
+
             return res.status(403).json({ error: 'Account temporarily locked due to too many failed login attempts.' });
         }
-        
+
         // Continue with regular login process
         next();
     });
 
     // Expose API endpoints with authentication
     app.use('/api', apiKeyAuth); // Protect all /api routes with API key auth
-    
+
     // Example JWT protected route
     app.use('/api/secure', jwtAuth); // Protect routes with JWT auth
-    
+
     // Example endpoint to generate JWT token (for testing purposes)
     app.post('/api/auth/token', (req, res) => {
         // In production, validate credentials before generating token
@@ -346,13 +363,13 @@ MongoClient.connect(db, (err, db) => {
 
     // Use secure HTTPS protocol in production or if FORCE_HTTPS env is set
     const useHttps = process.env.NODE_ENV === 'production' || process.env.FORCE_HTTPS === 'true';
-    
+
     if (useHttps) {
         // Secure HTTPS connection
         https.createServer(httpsOptions, app).listen(port, () => {
             logger.info(`Express https server listening on port ${port}`);
         });
-        
+
         // Redirect HTTP to HTTPS
         http.createServer((req, res) => {
             res.writeHead(301, { 'Location': `https://${req.headers.host}${req.url}` });
