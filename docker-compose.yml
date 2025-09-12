@@ -2,16 +2,32 @@ version: "3.7"
 
 services:
   web:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.node16
+    container_name: nodegoat_web
     environment:
-      NODE_ENV:
-      MONGODB_URI: mongodb://mongo:27017/nodegoat
+      NODE_ENV: production
+      # Other environment variables can be set here or via env_file
+    env_file: 
+      - .env.local
     command: sh -c "until nc -z -w 2 mongo 27017 && echo 'mongo is ready for connections' && node artifacts/db-reset.js && npm start; do sleep 2; done"
     ports:
       - "4000:4000"
+      - "8080:8080"  # For HTTP to HTTPS redirection if enabled
+    volumes:
+      - ./logs:/app/logs  # For persistent logging
+    restart: unless-stopped
 
   mongo:
     image: mongo:4.4
+    container_name: nodegoat_mongo
     user: mongodb
+    volumes:
+      - mongo-data:/data/db  # For persistent database
     expose:
       - 27017
+    restart: unless-stopped
+
+volumes:
+  mongo-data:

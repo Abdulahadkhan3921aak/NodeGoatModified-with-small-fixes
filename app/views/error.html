@@ -1,0 +1,55 @@
+<!doctype HTML>
+<html>
+
+<head>
+    <title>Security Error</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        h1 {
+            color: #cc0000;
+        }
+        .error-message {
+            background-color: #fff0f0;
+            border-left: 4px solid #cc0000;
+            padding: 10px 15px;
+            margin: 20px 0;
+        }
+        .back-link {
+            display: inline-block;
+            margin-top: 20px;
+            padding: 10px 15px;
+            background-color: #0066cc;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Security Error</h1>
+        
+        <div class="error-message">
+            <p>{{error}}</p>
+        </div>
+        
+        <p>For security reasons, you've encountered an error while using this application.</p>
+        
+        <a href="/login" class="back-link">Back to Login</a>
+    </div>
+</body>
+
+</html>
